@@ -1,0 +1,158 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+blueprint_name: hpc-slurm-ubuntu2004-v6
+ghpc_version: eb002543
+vars:
+  deployment_name: slurm-gcp-v6
+  instance_image_custom: true
+  labels:
+    ghpc_blueprint: hpc-slurm-ubuntu2004-v6
+    ghpc_deployment: ((var.deployment_name))
+  project_id: dogfood-clouds
+  region: us-west4
+  slurm_image:
+    family: slurm-gcp-6-6-ubuntu-2004-lts
+    project: schedmd-slurm-public
+  zone: us-west4-c
+deployment_groups:
+  - group: primary
+    terraform_providers:
+      google:
+        source: hashicorp/google
+        version: '>= 4.84.0, < 5.39.0'
+        configuration:
+          project: ((var.project_id))
+          region: ((var.region))
+          zone: ((var.zone))
+      google-beta:
+        source: hashicorp/google-beta
+        version: '>= 4.84.0, < 5.39.0'
+        configuration:
+          project: ((var.project_id))
+          region: ((var.region))
+          zone: ((var.zone))
+    modules:
+      - source: modules/network/vpc
+        kind: terraform
+        id: network1
+        settings:
+          deployment_name: ((var.deployment_name))
+          project_id: ((var.project_id))
+          region: ((var.region))
+      - source: modules/file-system/filestore
+        kind: terraform
+        id: homefs
+        use:
+          - network1
+        settings:
+          deployment_name: ((var.deployment_name))
+          labels: ((var.labels))
+          local_mount: /home
+          network_id: ((module.network1.network_id))
+          project_id: ((var.project_id))
+          region: ((var.region))
+          zone: ((var.zone))
+      - source: community/modules/compute/schedmd-slurm-gcp-v6-nodeset
+        kind: terraform
+        id: debug_nodeset
+        use:
+          - network1
+        settings:
+          enable_placement: false
+          instance_image: ((var.slurm_image))
+          instance_image_custom: ((var.instance_image_custom))
+          labels: ((var.labels))
+          machine_type: n2-standard-2
+          name: debug_nodeset
+          node_count_dynamic_max: 4
+          project_id: ((var.project_id))
+          region: ((var.region))
+          subnetwork_self_link: ((module.network1.subnetwork_self_link))
+          zone: ((var.zone))
+      - source: community/modules/compute/schedmd-slurm-gcp-v6-partition
+        kind: terraform
+        id: debug_partition
+        use:
+          - debug_nodeset
+        settings:
+          exclusive: false
+          is_default: true
+          nodeset: ((flatten([module.debug_nodeset.nodeset])))
+          partition_name: debug
+      - source: community/modules/compute/schedmd-slurm-gcp-v6-nodeset
+        kind: terraform
+        id: compute_nodeset
+        use:
+          - network1
+        settings:
+          bandwidth_tier: gvnic_enabled
+          instance_image: ((var.slurm_image))
+          instance_image_custom: ((var.instance_image_custom))
+          labels: ((var.labels))
+          name: compute_nodeset
+          node_count_dynamic_max: 20
+          project_id: ((var.project_id))
+          region: ((var.region))
+          subnetwork_self_link: ((module.network1.subnetwork_self_link))
+          zone: ((var.zone))
+      - source: community/modules/compute/schedmd-slurm-gcp-v6-partition
+        kind: terraform
+        id: compute_partition
+        use:
+          - compute_nodeset
+        settings:
+          nodeset: ((flatten([module.compute_nodeset.nodeset])))
+          partition_name: compute
+      - source: community/modules/scheduler/schedmd-slurm-gcp-v6-controller
+        kind: terraform
+        id: slurm_controller
+        use:
+          - network1
+          - slurm_login
+          - debug_partition
+          - compute_partition
+          - homefs
+        settings:
+          deployment_name: ((var.deployment_name))
+          enable_controller_public_ips: true
+          instance_image: ((var.slurm_image))
+          instance_image_custom: ((var.instance_image_custom))
+          labels: ((var.labels))
+          login_nodes: ((flatten([module.slurm_login.login_nodes])))
+          network_storage: ((flatten([module.homefs.network_storage])))
+          nodeset: ((flatten([module.compute_partition.nodeset, flatten([module.debug_partition.nodeset])])))
+          nodeset_dyn: ((flatten([module.compute_partition.nodeset_dyn, flatten([module.debug_partition.nodeset_dyn])])))
+          nodeset_tpu: ((flatten([module.compute_partition.nodeset_tpu, flatten([module.debug_partition.nodeset_tpu])])))
+          partitions: ((flatten([module.compute_partition.partitions, flatten([module.debug_partition.partitions])])))
+          project_id: ((var.project_id))
+          region: ((var.region))
+          subnetwork_self_link: ((module.network1.subnetwork_self_link))
+          zone: ((var.zone))
+      - source: community/modules/scheduler/schedmd-slurm-gcp-v6-login
+        kind: terraform
+        id: slurm_login
+        use:
+          - network1
+        settings:
+          enable_login_public_ips: true
+          instance_image: ((var.slurm_image))
+          instance_image_custom: ((var.instance_image_custom))
+          labels: ((var.labels))
+          machine_type: n2-standard-4
+          name_prefix: slurm_login
+          project_id: ((var.project_id))
+          region: ((var.region))
+          subnetwork_self_link: ((module.network1.subnetwork_self_link))
+          zone: ((var.zone))

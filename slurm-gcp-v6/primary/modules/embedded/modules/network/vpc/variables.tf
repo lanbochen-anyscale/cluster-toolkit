@@ -61,8 +61,7 @@ variable "deployment_name" {
 variable "network_address_range" {
   description = "IP address range (CIDR) for global network"
   type        = string
-  # This is the vpc for the gcp slurm hpc cluster. 
-  default     = "172.16.0.0/8"
+  default     = "172.16.0.0/12"
 
   validation {
     condition     = can(cidrhost(var.network_address_range, 0))
