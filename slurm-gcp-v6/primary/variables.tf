@@ -27,6 +27,9 @@ variable "instance_image_custom" {
 variable "labels" {
   description = "Toolkit deployment variable: labels"
   type        = any
+  default = {
+    "ttl-hours": "8"
+  }
 }
 
 variable "project_id" {

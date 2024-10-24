@@ -37,7 +37,9 @@ module "debug_nodeset" {
   enable_placement       = false
   instance_image         = var.slurm_image
   instance_image_custom  = var.instance_image_custom
-  labels                 = var.labels
+  labels                  = {
+    "ttl-hours": "8"
+  }
   machine_type           = "n2-standard-2"
   name                   = "debug_nodeset"
   node_count_dynamic_max = 2
@@ -61,8 +63,12 @@ module "compute_nodeset" {
   bandwidth_tier         = "gvnic_enabled"
   instance_image         = var.slurm_image
   instance_image_custom  = var.instance_image_custom
-  labels                 = var.labels
+  labels                  = {
+    "ttl-hours": "8"
+  }
   name                   = "compute_nodeset"
+  machine_type = "g2-standard-16"
+  disk_size_gb = 256
   node_count_dynamic_max = 2
   project_id             = var.project_id
   region                 = var.region
@@ -83,7 +89,9 @@ module "slurm_controller" {
   enable_controller_public_ips = true
   instance_image               = var.slurm_image
   instance_image_custom        = var.instance_image_custom
-  labels                       = var.labels
+  labels                  = {
+    "ttl-hours": "8"
+  }
   login_nodes                  = flatten([module.slurm_login.login_nodes])
   network_storage              = flatten([module.homefs.network_storage])
   nodeset                      = flatten([module.compute_partition.nodeset, flatten([module.debug_partition.nodeset])])
@@ -101,7 +109,9 @@ module "slurm_login" {
   enable_login_public_ips = true
   instance_image          = var.slurm_image
   instance_image_custom   = var.instance_image_custom
-  labels                  = var.labels
+  labels                  = {
+    "ttl-hours": "8"
+  }
   machine_type            = "n2-standard-4"
   name_prefix             = "slurm_login"
   project_id              = var.project_id
